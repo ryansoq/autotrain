@@ -1,28 +1,84 @@
+---
+# 開始迴圈前，下方每一個值都要編輯。
+# 驗證指令：grep -nE '\{FILL' program.md   （必須無輸出）。
+
+mission: "{FILL: 一句話 — 這個專案的「成功」長什麼樣？}"
+
+scope:
+  in:  ["{FILL: agent 可修改的路徑}"]
+  out: ["{FILL: agent 不可修改的路徑}"]
+
+hard_constraints:
+  - "{FILL: 規則 1}"
+  - "{FILL: 規則 2}"
+
+metric:
+  # 從三種挑一個分支：scalar | multi_axis | pass_fail。刪掉沒用到的分支。
+  type: scalar
+
+  # --- if scalar ---
+  name: "{FILL: 指標名稱，例如 val_bpb}"
+  direction: lower_is_better        # 或 higher_is_better
+  noisy: false                      # 若為 true，需設 small_win_threshold
+  small_win_threshold: 0.0
+
+  # --- if multi_axis ---
+  # axes: [depth, content, polish, code]
+  # priority: [depth, content, code, polish]   # 排序，最高優先在前
+  # consecutive_same_axis_max: 3
+
+  # --- if pass_fail ---
+  # （不需額外欄位；validation 通過即決策）
+
+validation:
+  command: |
+    {FILL: shell 命令 — 決定性的 go/no-go check}
+  on_failure: fix_or_revert
+
+iteration_budget:
+  type: best_effort                 # 或 fixed_time
+  time_minutes: 0                   # 只在 type: fixed_time 時使用
+  kill_minutes: 10                  # 任何 type 都套用的硬性 kill 門檻
+
+stopping_conditions:
+  never_stop: false                 # 開放式搜尋（autotrain 風格）設 true
+  conditions:
+    - "{FILL: 例如 backlog 變稀薄且 reflection 也想不出新方向}"
+    - "{FILL: 例如 連續兩次 iter crash 且無法修}"
+
+cadence:
+  reflection_every_n_keeps: 5
+  exploratory_every_n_iters: 10
+  consolidation_every_n_keeps: 15
+
+idea_sources:                       # 依序嘗試；不存在或空的 source 跳過
+  - feedback_inbox
+  - backlog
+  - reflection_generated
+  - exploratory
+---
+
 # program.md — 通用基底
 
-這個檔案是任何「自主迴圈」型專案的通用基底：一個 LLM agent 對著明確目標**手術式**地反覆做實驗／改進，直到觸發停止條件。
+這個檔案是任何「自主迴圈」型專案的通用基底：LLM agent 對著明確目標**手術式**地反覆做實驗／改進，直到觸發停止條件。
 
-它從兩次實際 run 提煉而成：
-
-- **autotrain**（ML 超參數搜尋）— 最小化 `val_bpb`，每次 iter 固定 5 分鐘訓練預算，永不停（直到人類打斷）。~80+ 次實驗，~18% keep 率。
-- **pikachu-godot**（遊戲開發內容建構）— 沿多軸品質 rubric 改進 Godot RPG demo，無時間預算，backlog 收斂時停止。108 次 iter，100% keep 率。
-
-兩次都活下來的紀律就是通用部分。其餘都是 slot，每個專案自己填。
+從兩次實際 run 提煉而成：**autotrain**（ML 超參數搜尋；最小化 `val_bpb`；永不停）與 **pikachu-godot**（Godot RPG 內容建構；多軸 rubric；有限停止）。兩個 run 都活下來的紀律就是這份檔案的本文。檔頭 frontmatter 是每個專案要填的部分。
 
 ## 如何使用這個基底
 
 1. **複製**這個檔案到你的專案根目錄為 `program.md`。
-2. **「通用核心」逐字保留** — 那些就是紀律。
-3. **填好每一個 `{SLOT}`** — 在「Project slots」區。
-4. **填完後刪掉**這個「如何使用」標頭與案例範例。
-5. **啟動前 slot-leak 檢查**：執行 `grep -nE '\{[A-Z_]+\}' program.md`。應該無輸出。任何回傳的行都是未填的 `{SLOT}` 字面殘留 — 開始迴圈前先填好。
-6. 開始迴圈。每次 iter 都重讀 `program.md` 作為唯一真相來源。
+2. **編輯檔頭 YAML frontmatter**：把每一個 `{FILL: ...}` placeholder 換掉。
+3. **挑一個 `metric.type`**（`scalar` | `multi_axis` | `pass_fail`），刪掉沒用的分支。
+4. **決定 `stopping_conditions.never_stop`**：開放式搜尋設 `true`，有限任務設 `false` 並寫明 `conditions`。
+5. **啟動前 slot-leak 檢查**：執行 `grep -nE '\{FILL' program.md`，必須無輸出。
+6. *(填完後可選)* 刪掉這個「如何使用」區段與下方的「Reference examples」區段。
+7. 開始迴圈。每次 iter 都重讀 `program.md` 作為唯一真相來源。
 
-唯一配對的檔案是 `results.tsv`（untracked、append-only log）。可選佐料：`journal.md`（永遠建議）、`backlog.md`（有限內容任務建議）、`feedback_inbox.md`（如果有人類會給回饋的話建議）。
+唯一配對的檔案是 `results.tsv`（untracked、append-only）。可選佐料：`journal.md`（永遠建立）、`backlog.md`（有限任務建議）、`feedback_inbox.md`（有人類在身邊建議）、`STOP`（kill-switch — 見下）。
 
 ---
 
-## 通用核心（逐字複製到你專案的 program.md）
+## 通用核心（不要編輯）
 
 ### Hypothesis 區塊 — 每次 commit
 
@@ -32,34 +88,32 @@
 Hypothesis: <一句話 — 這個改動推進目標的機制>
 Assumptions: <一行 — 我所依賴的當前 repo 狀態；如果這個假設錯，結果就無法詮釋>
 Prediction: <預期效果：方向、幅度、或質性描述>
-Tripwire: <一個結果，代表實驗本身壞了（不是想法錯）— 在 discard 前先排查>
+Tripwire: <一個結果，代表實驗本身壞了（不是想法錯）>
 ```
 
 如果你真的講不出機制，在 `Prediction:` 前加 `exploratory:`，並對結果格外懷疑。
 
 ### Surgical diffs
 
-實驗 commit 中**每一行改動都必須能追溯到當前 Hypothesis**。順手的改動 — 排版、改名、順手 refactor、清死碼 — 都**不能**打包進實驗 commit。它們會在 discard 時模糊掉「是哪一行壞了」。
+實驗 commit 中**每一行改動都必須能追溯到當前 Hypothesis**。順手的改動 — 排版、改名、順手 refactor、清死碼 — 都**不能**打包進實驗 commit。
 
-檢驗：挑 diff 中任何一行。問：「如果只 revert 這一行，這個 commit 還在測同一個 hypothesis 嗎？」如果是，這行就是順便的 — 從這個 commit 拿掉。
+檢驗：挑 diff 中任何一行。問：「如果只 revert 這一行，這個 commit 還在測同一個 hypothesis 嗎？」如果是，這行就是順便的 — 拿掉。
 
 清理是允許的，但要獨立 commit，subject 用 `refactor: ... (no behavior change expected)`。這種 commit 後跑一次驗證；指標應該在噪音範圍內不變。
 
-衡量 diff 大小用 `git diff --stat -w` — 縮排重排會讓原始 stats 暴漲（純空白變化）。
+衡量 diff 大小用 `git diff --stat -w` — 縮排重排會讓原始 stats 暴漲。
 
 ### Simplicity bias 加 soft cap
 
-其他條件相同時，越簡單越好。一點點進步但加上醜陋複雜的程式碼是不值得的。**移除程式碼**而指標持平，永遠是 keep。
-
-**Soft cap**：實驗 diff 超過 50 行（不算空白）新增就必須在 commit body 為大小辯護。
+其他條件相同時，越簡單越好。**移除程式碼**而指標持平，永遠是 keep。**Soft cap**：實驗 diff 超過 50 行（不算空白）新增就必須在 commit body 為大小辯護。
 
 ### Open Questions 紀律
 
-迴圈中對某件事不確定（「為什麼這段 code 存在？」、「這個假設成立嗎？」、「X 應該等於 Y 嗎？」）且無法廉價解決時：在 `journal.md` 的 Open Questions 區追加一行 bullet，然後繼續。**不要停下迴圈。不要問人類。** 下次 reflection cycle 處理。
+迴圈中對某件事不確定且無法廉價解決時：在 `journal.md` 的 Open Questions 區追加一行 bullet，然後繼續。**不要停下迴圈。不要問人類。** 下次 reflection cycle 處理。
 
 ### Journal 是活的記憶
 
-`journal.md` 由迴圈寫入，分兩區：
+`journal.md` 分兩區：
 
 ```markdown
 # Journal
@@ -70,203 +124,208 @@ Tripwire: <一個結果，代表實驗本身壞了（不是想法錯）— 在 d
 - (週期性綜合整理；每次 reflection 一塊)
 ```
 
-每 `{REFLECTION_CADENCE}` 次 keep 觸發一次 Reflection。內容包括最近一批的綜合整理（哪些 land、哪些沒、共同主題、dead end、接下來 1–2 個方向），並處理 Open Questions list。
+每 `cadence.reflection_every_n_keeps` 次 keep 觸發一次 Reflection。內容綜合最近一批（哪些 land、哪些沒、共同主題、dead end、接下來 1–2 個方向）並處理 Open Questions list。
 
-### 永遠不要問人類
+### 永遠不問人類，但永遠尊重 `STOP`
 
-迴圈一旦開始，**不要**停下來問「我該繼續嗎？」人類可能在睡覺。把疑問寫進 Open Questions 然後繼續。迴圈只在 `{STOPPING_CONDITIONS}` 觸發時才結束。
+迴圈一旦開始，**不要**停下來問「我該繼續嗎？」把疑問寫進 Open Questions。迴圈只在以下三件事任一發生時結束：
+
+1. `stopping_conditions.conditions` 任一述詞觸發。
+2. 專案根目錄存在名為 `STOP` 的檔案（決定性 kill-switch — 人類用這個在不編輯 `program.md` 的情況下停下迴圈）。
+3. 當次 iter 超過 `iteration_budget.kill_minutes`（視為 crash）。
 
 ### 迴圈
 
 ```
-LOOP UNTIL {STOPPING_CONDITIONS} 任一為真：
+LOOP:
 
-  0. 如果 iteration_count % {REFLECTION_CADENCE} == 0 且本次是 keep：
-       執行 reflection — 更新 journal.md Reflections，處理 Open Questions。
+  0. Pre-iteration checks（永遠執行）：
+       - 若 STOP file 存在 → 寫 final journal entry「loop terminated by STOP」，退出。
+       - 確認 `grep -nE '\{FILL' program.md` 為空（slot-leak guard）。
+       - 若 keeps_count > 0 且 keeps_count % cadence.reflection_every_n_keeps == 0
+         且 last_reflection_at_keeps != keeps_count：
+           執行 reflection — 更新 journal.md Reflections，處理 Open Questions。
 
-  0a. 如果 feedback_inbox.md 存在且非空：
-       優先順序高於 backlog 與 reflection-generated ideas。
+  1. Orient：git status；讀 journal.md；讀 results.tsv 最後 5 列。
 
-  1. Orient：先確認 `grep -nE '\{[A-Z_]+\}' program.md` 為空（slot-leak
-     哨兵 — 未填 slot 字面殘留要立刻 fail loud）；然後 git status、
-     讀 journal.md、讀 results.tsv 最後 5 列。
+  2. 讀 feedback_inbox.md 若存在且非空（最高優先 idea source）。
 
-  2. 依 {IDEA_SOURCES} 挑下一個項目；cadence 覆寫：
-       - 每 {EXPLORATORY_EVERY} 次 iter：強迫挑一個非 backlog、非安全的項目
-         （預期 discard 機率較高；對抗 100% keep 失能舒適區）
-       - 每 {CONSOLIDATION_EVERY} 次 keep：強迫一次目標為「LOC 負成長」的
-         iter（refactor、dedupe、刪除；指標必須維持）
+  3. 依 idea_sources 優先序挑下一項；cadence 覆寫：
+       - 每 cadence.exploratory_every_n_iters 次 iter：強迫挑非 backlog、
+         接受門檻較低的項目（對抗 100%-keep 失能舒適區）。
+       - 每 cadence.consolidation_every_n_keeps 次 keep：強迫一次目標為
+         負 LOC delta 的 iter（refactor、dedupe、刪除；指標必須維持）。
 
-  3. 寫 Hypothesis / Assumptions / Prediction / Tripwire — 在 coding **之前**。
+  4. 寫 Hypothesis / Assumptions / Prediction / Tripwire — 在 coding **之前**。
 
-  4. 手術式實作。檢查 `git diff --stat -w` 合理。
+  5. 手術式實作。檢查 `git diff --stat -w` 合理。
 
-  5. 跑 {VALIDATION}。
+  6. 跑 validation.command。
 
-  6. Tripwire check：如果結果命中 tripwire，先做健全性檢查（重看 diff、重 grep
+  7. Tripwire check：若結果命中 tripwire，先做健全性檢查（重看 diff、重 grep
      log）確認實驗按預期跑了，再決定是否 discard。
 
-  7. 如果 {NOISY} 且改進 < {SMALL_WIN_THRESHOLD}：seed re-check（用不同 seed
-     多跑一次；要求兩次平均仍打敗 baseline 才 keep）。否則跳過。
+  8. 若 metric.noisy 且改進 < metric.small_win_threshold：
+     seed re-check（用不同 seed 多跑一次；要求兩次平均仍打敗 baseline）。
+     否則跳過。
 
-  8. 依 {DECISION_RULE} 決定 keep / discard。
+  9. 依 metric.type 決定 keep / discard：
+       - scalar：嚴格進步才 keep。
+       - multi_axis：至少一軸進步且無一軸退步才 keep；遵守
+         consecutive_same_axis_max。
+       - pass_fail：validation.command 通過才 keep。
 
-  9. Commit（只有 keep 才 commit），body 含四行 hypothesis 區塊。
-     如果 diff > 50 行非空白新增，在 body 中辯護。
+ 10. Commit（只有 keep 才 commit），body 含四行 hypothesis 區塊。
+     若 diff > 50 行非空白新增，在 body 中辯護。
 
- 10. 在 results.tsv 追加一列（每次嘗試都記錄，包含 discard 與 crash）。
+ 11. 在 results.tsv 追加一列（每次嘗試都記錄，包含 discard 與 crash）。
 
- 11. 只有結果讓你意外或揭露了值得記下的事，才寫 journal。不是每次都寫。
+ 12. 只有結果讓你意外或揭露了值得記下的事，才寫 journal。不是每次都寫。
 
- 12. 更新 backlog.md（劃掉做完的、加入發現的後續）。
+ 13. 更新 backlog.md（劃掉做完的、加入發現的後續）。
 
- 13. 檢查 {STOPPING_CONDITIONS}；任一為真就寫 final journal entry 並停止。
+ 14. 檢查 stopping_conditions.conditions；任一為真 → final journal entry，退出。
 ```
 
 ---
 
-## Project slots — 你必須填這些
+## Reference examples — 兩個案例怎麼填 frontmatter
 
-### {MISSION}
+### autotrain（ML 超參數搜尋）
 
-一段話。這個專案的「成功」長什麼樣？
+```yaml
+mission: "在固定的評估 harness 上拿到最低的 val_bpb；每次訓練 run 上限 5 分鐘；迴圈無限期執行。"
 
-- *autotrain*：「在固定的評估 harness 上拿到最低的 `val_bpb`。每次訓練 run 上限 5 分鐘 wall clock。迴圈無限期執行；`progress.png` 那條曲線就是交付物。」
-- *pikachu-godot*：「把 `examples/pikachu-godot/` 變成一個更完整的遊戲 — 玩法系統、內容、機制 — 一次一個小的手術式改動。當作長 run 的內容建構，不是 polish pass。」
+scope:
+  in:  [train.py]
+  out: [prepare.py, evaluation harness, dependencies, time budget]
 
-### {SCOPE}
+hard_constraints:
+  - "no new packages beyond pyproject.toml"
+  - "do not modify the eval harness"
+  - "project must run without crashing within the time budget"
 
-可動（in-scope）vs 不可動（out-of-scope）。
+metric:
+  type: scalar
+  name: val_bpb
+  direction: lower_is_better
+  noisy: true
+  small_win_threshold: 0.002
 
-- *autotrain*：in = [`train.py`]；out = [`prepare.py`、評估 harness、相依、時間預算]。
-- *pikachu-godot*：in = [`scenes/`、`scripts/`、`tools/make_assets.py`、專案 README、journal/results/program]；out = [`skills/`、`src/`、頂層 repo 文件、`CLAUDE.md`]。
+validation:
+  command: |
+    uv run train.py > run.log 2>&1
+    grep "^val_bpb:\|^peak_vram_mb:" run.log
+  on_failure: fix_or_revert
 
-### {HARD_CONSTRAINTS}
+iteration_budget:
+  type: fixed_time
+  time_minutes: 5
+  kill_minutes: 10
 
-不可違背的規則。明確列出。
+stopping_conditions:
+  never_stop: true
+  conditions: []
 
-- *autotrain*：不能新增 `pyproject.toml` 之外的套件；不能修改評估 harness；專案必須在時間預算內不 crash 跑完。
-- *pikachu-godot*：不能新增 `Pillow`+`numpy` 之外的相依；不能用 `image_gen`（用 Pillow placeholder）；不能用音訊檔案（只能 `AudioStreamGenerator`）；保持 SKILL replacement points 乾淨；專案必須能透過 `godot4 --headless --import` 啟動。
+cadence:
+  reflection_every_n_keeps: 5
+  exploratory_every_n_iters: 10
+  consolidation_every_n_keeps: 15
 
-**通用建議**：如果你的專案有面向使用者的 README 列出 features 或 limitations，加一條：「任何 commit 若 ship 一個使用者可見的 feature，必須在同一 commit 更新 README 的 Limitations 區。」這防止 README rot — pikachu-godot 的 README 到 iter15 仍然列出 14 條已經 ship 但被標為「not in scope」的功能，因為迴圈從不更新它。
+idea_sources:
+  - feedback_inbox
+  - reflection_generated
+  - exploratory
+```
 
-### {METRIC} 與 {DECISION_RULE}
+### pikachu-godot（遊戲開發內容建構）
 
-從三種形狀挑一個：
+```yaml
+mission: "把 examples/pikachu-godot/ 變成更完整的遊戲 — 玩法系統、內容、機制 — 一次一個小的手術式改動。"
 
-**Scalar metric**（如 autotrain 的 `val_bpb`）：
-- 方向：lower-is-better 或 higher-is-better。
-- 決策：指標嚴格進步才 keep。
-- 設定下方的 `{NOISY}` 與 `{SMALL_WIN_THRESHOLD}`。
+scope:
+  in:  [scenes/, scripts/, tools/make_assets.py, README.md, journal.md, results.tsv, program.md]
+  out: [skills/, src/, top-level repo docs, CLAUDE.md]
 
-**Multi-axis rubric**（如 pikachu-godot 的 depth/content/polish/code/skill-ready/bug）：
-- 列出你的 axes。
-- 優先順序（例如 depth > content > code > polish）：模稜兩可時偏向高優先序。
-- 決策：至少一軸進步且無一軸退步才 keep。
-- 建議的硬規則：同 axis 連續次數上限（預設 3），對抗 axis 漂移（特別是「polish trap」）。
+hard_constraints:
+  - "no new dependencies beyond Pillow + numpy"
+  - "no image_gen — use Pillow placeholder shapes"
+  - "no audio files — synthesized AudioStreamGenerator only"
+  - "SKILL replacement points must remain swappable"
+  - "project must boot via godot4 --headless --import"
+  - "ship user-visible feature → must update README Limitations in same commit"
 
-**Pass-fail**（驗證通過或失敗）：
-- 決策：`{VALIDATION}` 通過且改動有對應追蹤目標就 keep。
-- 用於只做 refactor / cleanup 的迴圈；實務上少見。
+metric:
+  type: multi_axis
+  axes: [depth, content, code, skill_ready, polish, bug]
+  priority: [depth, content, code, skill_ready, polish, bug]
+  consecutive_same_axis_max: 3
 
-### {VALIDATION}
+validation:
+  command: |
+    cd examples/pikachu-godot
+    rm -rf .godot
+    godot4 --headless --import 2>&1 | grep -iE '^ERROR' | grep -v leaked
+    timeout 6 godot4 --headless --quit-after 240 res://scenes/TitleScreen.tscn 2>&1 | grep -iE 'error|invalid|fail' | grep -v leaked
+    timeout 6 godot4 --headless --quit-after 240 res://scenes/Overworld.tscn   2>&1 | grep -iE 'error|invalid|fail' | grep -v leaked
+    timeout 6 godot4 --headless --quit-after 240 res://scenes/Battle.tscn      2>&1 | grep -iE 'error|invalid|fail' | grep -v leaked
+  on_failure: fix_or_revert
 
-可從 command line 跑、決定性的 go/no-go check。判讀**不應**需要人類判斷。
+iteration_budget:
+  type: best_effort
+  kill_minutes: 10
 
-- *autotrain*：`uv run train.py > run.log 2>&1` 然後 `grep "^val_bpb:\|^peak_vram_mb:" run.log`（grep 空 ⇒ crash；用 `tail -n 50 run.log` 看 traceback）。
-- *pikachu-godot*：`godot4 --headless --import` + 用 `--quit-after` 啟動每個 scene ~4 秒，grep stderr 找 `error|invalid|fail`（排除無害的 "ObjectDB instances leaked"）。
+stopping_conditions:
+  never_stop: false
+  conditions:
+    - "backlog 未做項目少於 3 個 AND 一次完整 reflection 仍想不出新點子"
+    - "連續兩次 iter crash 且無法修"
+    - "revert 後 baseline 仍硬性驗證失敗（環境壞）"
 
-### {ITERATION_BUDGET}
+cadence:
+  reflection_every_n_keeps: 5
+  exploratory_every_n_iters: 10
+  consolidation_every_n_keeps: 15
 
-- *autotrain*：固定 5 分鐘訓練（腳本內強制）；總 wall-clock 超過 10 分鐘就 kill。
-- *pikachu-godot*：best-effort（無時間上限；iter 在驗證通過時結束）。
-
-如果你的領域有自然的 per-iter 時間，固定它。如果沒有，用 best-effort 但**寫一個 kill 門檻**讓失控 iter 能被中止。
-
-### {NOISY} 與 {SMALL_WIN_THRESHOLD}
-
-指標每次 iter 是否有隨機性？
-
-- *autotrain*：noisy=true、threshold=0.002。低於門檻時做一次 seed re-check，要求兩次平均仍打敗 baseline 才 keep。
-- *pikachu-godot*：noisy=false（遊戲改動是決定性的）→ 跳過 seed re-check。
-
-### {STOPPING_CONDITIONS}
-
-- *autotrain*：永不停（只在人類打斷時）。
-- *pikachu-godot*：以下**任一**為真就停：
-  - Backlog 未做項目少於 3 個 **且** 一次完整 reflection 後仍想不出新點子。
-  - 連續兩次 iter crash 且當下無法修。
-  - revert 後 baseline 仍硬性驗證失敗（環境壞了）。
-
-有限內容領域要設真正的停止條件。開放式搜尋領域，「永不停」是對的。
-
-### {REFLECTION_CADENCE}
-
-預設：每 **5 keeps**（pikachu-godot 採用；那邊 lessons 累積得快）。autotrain 原本「每 20」太稀疏 — 除非你的 iter 極度便宜，否則回頭採 5。
-
-### {EXPLORATORY_EVERY} 與 {CONSOLIDATION_EVERY}
-
-可選，但都是經驗換來的。
-
-- `{EXPLORATORY_EVERY}`（預設 10）：每 N 次 iter 強迫挑**不在 backlog** 上的點子。接受門檻放低。對抗舒適區 — pikachu-godot 跑 108 次 iter 100% keep 率，失敗探索率太低。
-- `{CONSOLIDATION_EVERY}`（預設 15）：每 N 次 keep 強迫一次目標為**負 LOC delta** 的 iter（刪除、dedupe、抽取）。指標必須維持。對抗「只增不減」 — pikachu-godot 的 `Battle.gd` 漲到 50KB、`Overworld.gd` 漲到 41KB，沒有任何一次 deletion-as-win iter。
-
-### {IDEA_SOURCES}（依優先序）
-
-預設順序：
-
-1. `feedback_inbox.md`（如果存在且非空）— 最高 ROI，pikachu-godot iter47–49 驗證過。
-2. `backlog.md` — 顯式 ranked 任務池。有限內容任務必備。
-3. Reflection-generated ideas（在 `journal.md` Reflections）。
-4. Exploratory（依 `{EXPLORATORY_EVERY}` 觸發）。
-
-開放式搜尋領域（autotrain）可以沒有 backlog；reflection + exploratory 撐起來。
+idea_sources:
+  - feedback_inbox
+  - backlog
+  - reflection_generated
+  - exploratory
+```
 
 ---
 
-## results.tsv
+## results.tsv — 形狀依 `metric.type` 推導
 
-Tab 分隔。Untracked（`.gitignore` 它）。Append-only — 每次嘗試都記一列，包含 `discard` 與 `crash`。
+Tab 分隔、untracked、append-only。每次嘗試都記一列，包含 `discard` 與 `crash`。
 
-欄位形狀依 `{METRIC}` 變化：
+| `metric.type` | 欄位 |
+|---|---|
+| `scalar` | `commit  metric  memory_or_cost  status  description` |
+| `multi_axis` | `commit  axis  status  summary` |
+| `pass_fail` | `commit  status  summary` |
 
-- **scalar**：`commit  metric  memory_or_cost  status  description`
-- **multi-axis**：`commit  axis  status  summary`
-- **pass-fail**：`commit  status  summary`
-
-共通欄位：
-- `commit`：短 hash（7 字元）。discard / crash 沒 commit 時用 `-`。
-- `status`：`keep | discard | crash`。
-- 最後的自由文字欄位不能有 tab。
-
-Crash 時數字欄位都 log 為 `0`。
+共通：`commit` 是短 hash（7 字元），無 commit 用 `-`。`status ∈ {keep, discard, crash}`。最後自由文字欄位不能有 tab。Crash 時數字欄位都用 `0`。
 
 ---
 
 ## 建議的佐料檔
 
-- `journal.md` — 永遠建立；Open Questions + Reflections 兩區在迴圈各處被引用。
-- `backlog.md` — 有限內容領域建議。純 markdown；分 tier；做完用刪除線而不是真刪（歷史本身有用）。
-- `feedback_inbox.md` — 有人類在身邊就建議。Append-only 檔案，人類在 sessions 之間寫入；迴圈在 iter 開頭讀。最高 ROI 的回饋通道。
+- `journal.md` — 永遠建立；Open Questions + Reflections 在迴圈各處被引用。
+- `backlog.md` — 有限內容領域建議（即 `stopping_conditions.never_stop = false`）。純 markdown、分 tier、做完用刪除線而不是真刪。
+- `feedback_inbox.md` — 有人類在身邊就建議。Append-only，人類在 sessions 之間寫入；迴圈在 iter 開頭讀。
+- `STOP` — kill-switch。專案根目錄空檔即可；agent 只檢查存在性。
 
 ---
 
 ## 兩次案例的 lessons（通用）
 
-從兩次 run 出來、值得在任何地方再用的：
-
-1. **框架是複利。** 一筆 ~50-LOC 的可重用框架投資（如 pikachu 的 `DialogueBox`、quest framework、held-item axes）通常能解鎖 5–10 次後續 ~30-LOC 的 iter。要分辨一次 iter 是在「鋪基礎」還是「擴充已有基礎」，能解鎖未來表面時優先前者。
-
-2. **「做完了」大概 80% 是錯的。** Agent 宣稱某軸 tapped out 時，強制再做一次 reflection scan — pikachu 在 iter50、iter65、iter90 的「depth tapped out」判斷各自都錯（多個標準機制其實還沒做）。用結構化 prompt 重新 review 比直覺「應該夠了吧」可靠。
-
-3. **縮排重排騙過 diff stats。** size cap 用 `git diff --stat -w`。一個原始 130/119 但實際只有 11 行新邏輯的 diff 不該觸發 50 行辯護規則。
-
-4. **自傷路徑需要兜底的勝負判定。** 通則：當你新增一種「回合結束時 state 會變化」的途徑（recoil、confusion、poison 等），確保現有的終局檢查能看到這條新路徑。純加性 feature 仍需做整合掃描。
-
-5. **跨場景框架重複到 2 個是可接受的。** 第 3 個 consumer 出現時才 refactor 成共用 autoload。提前抽象是常見的過度工程陷阱。
-
-6. **單一最高 ROI 的輸入是直接的使用者回饋。** pikachu 中一句使用者回饋（「attack 那畫面感覺卡住」）揭露了 4 個隱藏 bug 與正確性問題。在你需要前先建好 `feedback_inbox.md` 通道。
-
-7. **README rot 是真風險。** 一個會改 code 但沒有「同步 README」硬規則的迴圈，會讓 README 持續宣稱專案缺乏一些早就 ship 的 feature。專案有面向使用者文件時，把 README 同步列入 hard constraint。
-
-8. **100% keep 率是異味，不是勝利。** 通常代表 agent 只挑經過預先過濾的安全項目。即使要付 discard 增加的代價，也要強迫探索性 iter。
+1. **框架是複利。** 一筆 ~50-LOC 的可重用框架投資通常能解鎖 5–10 次後續 ~30-LOC 的 iter。
+2. **「做完了」大概 80% 是錯的。** Agent 宣稱某軸 tapped out 時，強制再做一次 reflection scan。
+3. **縮排重排騙過 diff stats。** size cap 用 `git diff --stat -w`。
+4. **state-mutation 路徑需要兜底的勝負判定。** 新增一種「step 結束時 state 會變化」的途徑時，確保現有的終局檢查能看到這條新路徑。
+5. **跨場景框架重複到 2 個是可接受的。** 第 3 個 consumer 出現時才抽共用 module。
+6. **單一最高 ROI 的輸入是直接的使用者回饋。** 一句 user note 可在數個 iter 之中揭出多個隱藏 bug。在你需要前先建好 `feedback_inbox.md` 通道。
+7. **README rot 是真風險。** 一個會改 code 但沒有「同步 README」硬規則的迴圈，會讓 README 持續宣稱專案缺乏一些早就 ship 的 feature。
+8. **100% keep 率是異味，不是勝利。** 通常代表 agent 只挑經過預先過濾的安全項目。`cadence.exploratory_every_n_iters` 是解藥 — 接受較高 discard 率作為代價。
