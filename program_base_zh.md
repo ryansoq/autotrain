@@ -15,7 +15,8 @@
 2. **「通用核心」逐字保留** — 那些就是紀律。
 3. **填好每一個 `{SLOT}`** — 在「Project slots」區。
 4. **填完後刪掉**這個「如何使用」標頭與案例範例。
-5. 開始迴圈。每次 iter 都重讀 `program.md` 作為唯一真相來源。
+5. **啟動前 slot-leak 檢查**：執行 `grep -nE '\{[A-Z_]+\}' program.md`。應該無輸出。任何回傳的行都是未填的 `{SLOT}` 字面殘留 — 開始迴圈前先填好。
+6. 開始迴圈。每次 iter 都重讀 `program.md` 作為唯一真相來源。
 
 唯一配對的檔案是 `results.tsv`（untracked、append-only log）。可選佐料：`journal.md`（永遠建議）、`backlog.md`（有限內容任務建議）、`feedback_inbox.md`（如果有人類會給回饋的話建議）。
 
@@ -86,7 +87,9 @@ LOOP UNTIL {STOPPING_CONDITIONS} 任一為真：
   0a. 如果 feedback_inbox.md 存在且非空：
        優先順序高於 backlog 與 reflection-generated ideas。
 
-  1. Orient：git status、讀 journal.md、讀 results.tsv 最後 5 列。
+  1. Orient：先確認 `grep -nE '\{[A-Z_]+\}' program.md` 為空（slot-leak
+     哨兵 — 未填 slot 字面殘留要立刻 fail loud）；然後 git status、
+     讀 journal.md、讀 results.tsv 最後 5 列。
 
   2. 依 {IDEA_SOURCES} 挑下一個項目；cadence 覆寫：
        - 每 {EXPLORATORY_EVERY} 次 iter：強迫挑一個非 backlog、非安全的項目

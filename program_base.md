@@ -15,7 +15,8 @@ The disciplines that survived both runs are universal. Everything else is a slot
 2. **Keep "Universal core" verbatim** — these are the disciplines.
 3. **Fill every `{SLOT}`** in "Project slots" with project-specific content.
 4. **Delete this "How to use" header** and the case-study examples once filled.
-5. Start the loop. Each iteration re-reads `program.md` as the single source of truth.
+5. **Pre-flight slot-leak check**: run `grep -nE '\{[A-Z_]+\}' program.md`. It must return nothing. Any line returned is an unfilled `{SLOT}` literal — fill it before starting the loop.
+6. Start the loop. Each iteration re-reads `program.md` as the single source of truth.
 
 The only paired file is `results.tsv` (untracked, append-only log). Optional adjuncts: `journal.md` (always recommended), `backlog.md` (recommended for finite-content tasks), `feedback_inbox.md` (recommended if a human is around to nudge the loop).
 
@@ -86,7 +87,9 @@ LOOP UNTIL any of {STOPPING_CONDITIONS} is true:
   0a. If feedback_inbox.md exists and is non-empty:
        prioritize its contents over backlog/reflection-generated ideas.
 
-  1. Orient: git status, read journal.md, read last 5 rows of results.tsv.
+  1. Orient: confirm `grep -nE '\{[A-Z_]+\}' program.md` is empty (slot-leak
+     guard — fail loud if an unfilled slot literal leaked in); then
+     git status, read journal.md, read last 5 rows of results.tsv.
 
   2. Pick next item per {IDEA_SOURCES}; cadence overrides:
        - every {EXPLORATORY_EVERY} iters: force a non-backlog, non-safe item
